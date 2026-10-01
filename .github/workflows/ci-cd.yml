@@ -24,33 +24,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate unique image tag
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=sha
-            type=raw,value=latest
+      - name: Set image name and tag
+        shell: powershell
+        run: |
+          "IMAGE_NAME=ghcr.io/${{ github.repository }}" >> $env:GITHUB_ENV
+          "IMAGE_TAG=sha-${{ github.sha }}" >> $env:GITHUB_ENV
 
       - name: Build Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        shell: powershell
+        run: |
+          docker build `
+            -t "${env:IMAGE_NAME}:${env:IMAGE_TAG}" `
+            -t "${env:IMAGE_NAME}:latest" `
+            .
+
+      - name: Push Docker image
+        shell: powershell
+        run: |
+          docker push "${env:IMAGE_NAME}:${env:IMAGE_TAG}"
+          docker push "${env:IMAGE_NAME}:latest"
 
       - name: Save Docker image
         shell: powershell
         run: |
-          docker save ghcr.io/${{ github.repository }}:sha-${{ github.sha }} -o "${{ github.workspace }}\my-portfolio-${{ github.sha }}.tar"
+          docker save "${env:IMAGE_NAME}:${env:IMAGE_TAG}" `
+            -o "${{ github.workspace }}\my-portfolio-${env:IMAGE_TAG}.tar"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v-${{ github.sha }}
-          name: Release ${{ github.sha }}
+          tag_name: "release-${{ github.sha }}"
+          name: "Release ${{ github.sha }}"
           generate_release_notes: true
           files: |
-            ${{ github.workspace }}\my-portfolio-${{ github.sha }}.tar
+            ${{ github.workspace }}\my-portfolio-${{ env.IMAGE_TAG }}.tar
